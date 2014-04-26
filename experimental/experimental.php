@@ -12,3 +12,5 @@ include "../vendor/autoload.php";
 $data = file_get_contents("sample.ass");
 
 $result = AssSplitter::parse($data);
+
+var_dump($result);
