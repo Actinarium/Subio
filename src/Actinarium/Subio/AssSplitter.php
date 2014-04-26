@@ -51,7 +51,7 @@ abstract class AssSplitter
             } elseif (empty($lines[$pointer])) {
                 // todo: push empty line to linked list
             } else {
-                throw new UnexpectedDataException("Malformed line found in Script Info section");
+                throw new UnexpectedDataException(sprintf("Malformed line found in Script Info section: line %s", $pointer + 1));
             }
         }
 
@@ -61,8 +61,9 @@ abstract class AssSplitter
         while ($pointer < $linesCount) {
 
             // loop prevention: if pointer hasn't moved during one iteration, this means we are stuck in a cycle
+            // and also it means there was malformed line that wasn't picked by any of conditionals
             if ($previousPointer == $pointer) {
-                throw new \RuntimeException("Looped execution detected. Please raise a bug");
+                throw new UnexpectedDataException(sprintf("Malformed line encountered: line %s", $pointer + 1));
             }
             $previousPointer = $pointer;
 
@@ -89,7 +90,7 @@ abstract class AssSplitter
                 } elseif ($lines[$pointer] === '[Graphics]') {
                     $state = 6;
                 } else {
-                    throw new UnexpectedDataException("Unknown section header found");
+                    throw new UnexpectedDataException(sprintf("Unknown section header found: line %s", $pointer + 1));
                 }
                 // todo: push section line to linked list
                 $pointer++;
@@ -106,7 +107,7 @@ abstract class AssSplitter
             if ($state === 1 || $state === 3) {
                 $fmtParts = preg_split('@(?<=^Format)\s*:\s*|(?<!Format)\s*,\s*@u', $lines[$pointer]);
                 if ($fmtParts[0] !== 'Format') {
-                    throw new UnexpectedDataException("Format string expected to start with 'Format:'");
+                    throw new UnexpectedDataException(sprintf("Format string expected to start with 'Format:', line %s", $pointer + 1));
                 }
                 // out of captured format parameters, build a regex to parse following lines
                 $formatParsingRegex = '\s*:\s*';
@@ -115,13 +116,22 @@ abstract class AssSplitter
                     if (preg_match('@[A-Za-z]+@', $fmtParts[$i])) {
                         $formatParsingRegex .= "(?P<{$fmtParts[$i]}>[^,]*),";
                     } else {
-                        throw new UnexpectedDataException("Format string parameters contain illegal characters");
+                        throw new UnexpectedDataException(sprintf("Format string parameters contain illegal characters: line %s", $pointer + 1));
                     }
                 }
-                if (preg_match('@[A-Za-z]+@', $fmtParts[$lastIndex])) {
-                    $formatParsingRegex .= "(?P<{$fmtParts[$lastIndex]}>.*$)@u";
+                if ($state === 1) {
+                    if (preg_match('@[A-Za-z]+@', $fmtParts[$lastIndex])) {
+                        $formatParsingRegex .= "(?P<{$fmtParts[$lastIndex]}>[^,]*)$@u";
+                    } else {
+                        throw new UnexpectedDataException(sprintf("Format string parameters contain illegal characters: line %s", $pointer + 1));
+                    }
                 } else {
-                    throw new UnexpectedDataException("Format string parameters contain illegal characters");
+                    // last section must be Text for Event format
+                    if ($fmtParts[$lastIndex] === 'Text') {
+                        $formatParsingRegex .= "(?P<{$fmtParts[$lastIndex]}>.*)$@u";
+                    } else {
+                        throw new UnexpectedDataException(sprintf("Last section of Event format must be 'Text': line %s", $pointer + 1));
+                    }
                 }
 
                 if ($state === 1) {
@@ -149,7 +159,7 @@ abstract class AssSplitter
                     $pointer++;
                     continue;
                 } else {
-                    throw new UnexpectedDataException("Style definition doesn't match style format");
+                    throw new UnexpectedDataException(sprintf("Style definition doesn't match style format: line %s", $pointer + 1));
                 }
             }
 
@@ -162,7 +172,7 @@ abstract class AssSplitter
                     $pointer++;
                     continue;
                 } else {
-                    throw new UnexpectedDataException("Event definition doesn't match event format");
+                    throw new UnexpectedDataException(sprintf("Event definition doesn't match event format: line %s", $pointer + 1));
                 }
             }
 
@@ -199,7 +209,7 @@ abstract class AssSplitter
             }
 
             // if we got there, that means we encountered illegal line
-            throw new UnexpectedDataException("Illegal line encountered");
+            throw new UnexpectedDataException(sprintf("Malformed line encountered: line %s", $pointer + 1));
         }
 
         return $output;
