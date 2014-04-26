@@ -8,6 +8,7 @@
 namespace Actinarium\Subio;
 
 
+use Actinarium\Subio\DataBlock;
 use Actinarium\Subio\Exception\UnexpectedDataException;
 
 abstract class AssSplitter
@@ -56,7 +57,15 @@ abstract class AssSplitter
 
         // Now parse the rest of the file (using state machine)
         $state = 0;
+        $previousPointer = $pointer - 1;
         while ($pointer < $linesCount) {
+
+            // loop prevention: if pointer hasn't moved during one iteration, this means we are stuck in a cycle
+            if ($previousPointer == $pointer) {
+                throw new \RuntimeException("Looped execution detected. Please raise a bug");
+            }
+            $previousPointer = $pointer;
+
             // skip empty line
             if (empty($lines[$pointer])) {
                 $pointer++;
@@ -65,7 +74,7 @@ abstract class AssSplitter
             }
 
             // check for section line
-            if ($state < 5 && $lines[$pointer][0] === '[') {
+            if ($lines[$pointer][0] === '[') {
                 if ($lines[$pointer] === '[V4+ Styles]'
                     || $lines[$pointer] === '[v4+ Styles]'
                     || $lines[$pointer] === '[v4 Styles+]'
@@ -157,9 +166,40 @@ abstract class AssSplitter
                 }
             }
 
-            // todo: parse fonts and graphics
+            // parse fonts (several at once, if not split by newlines or such)
+            if ($state === 5) {
+                while (preg_match('@^(?:fontname)\s*:\s*(.*)$@u', $lines[$pointer], $matches)) {
+                    $block = new DataBlock();
+                    $block->setName($matches[1]);
+                    $pointer++;
+                    while (preg_match('@^[\x21-\x60]{1,80}$@', $lines[$pointer])) {
+                        $block->appendEncodedData($lines[$pointer]);
+                        $pointer++;
+                    }
+                    $output->fonts[] = $block;
+                    // todo: push font block to linked list
+                }
+                continue;
+            }
 
-            $pointer++;
+            // parse graphics (several at once, if not split by newlines or such)
+            if ($state === 6) {
+                while (preg_match('@^(?:filename)\s*:\s*(.*)$@u', $lines[$pointer], $matches)) {
+                    $block = new DataBlock();
+                    $block->setName($matches[1]);
+                    $pointer++;
+                    while (preg_match('@[\x21-\x60]{1,80}@', $lines[$pointer])) {
+                        $block->appendEncodedData($lines[$pointer]);
+                        $pointer++;
+                    }
+                    $output->graphics[] = $block;
+                    // todo: push graphics block to linked list
+                }
+                continue;
+            }
+
+            // if we got there, that means we encountered illegal line
+            throw new UnexpectedDataException("Illegal line encountered");
         }
 
         return $output;

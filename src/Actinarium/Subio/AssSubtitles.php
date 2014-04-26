@@ -14,8 +14,9 @@ class AssSubtitles {
     public $properties = array();
     public $styles = array();
     public $events = array();
+    public $fonts = array();
+    public $graphics = array();
 
     public $styleFormat;
     public $eventFormat;
-
-} 
+}
