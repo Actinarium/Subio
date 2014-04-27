@@ -36,6 +36,7 @@ class DataBlock
     public function getBinaryData()
     {
         if ($this->binaryData === null) {
+            $this->binaryData = self::decode($this->encodedData);
         }
         return $this->binaryData;
     }
@@ -58,6 +59,7 @@ class DataBlock
     public function getEncodedData()
     {
         if ($this->encodedData === null) {
+            $this->encodedData = self::encode($this->binaryData);
         }
         return $this->encodedData;
     }
@@ -98,5 +100,79 @@ class DataBlock
     {
         $this->name = $name;
         return $this;
+    }
+
+    /**
+     * Decode AAS data block into binary string
+     *
+     * @param string $data Content from AAS data block (font or graphics), in pseudo-UUEncode format
+     *
+     * @return string binary string
+     */
+    public static function decode(&$data)
+    {
+        $pointer = 0;
+        $lenLimit = strlen($data) - 4;
+        $output = '';
+        while ($pointer <= $lenLimit) {
+            $i = (ord($data[$pointer++]) - 0x21) << 18
+                | (ord($data[$pointer++]) - 0x21) << 12
+                | (ord($data[$pointer++]) - 0x21) << 6
+                | (ord($data[$pointer++]) - 0x21);
+            $output .= chr($i >> 16)
+                . chr($i >> 8)
+                . chr($i);
+        }
+        if ($pointer == $lenLimit + 2) {
+            // two hanging chars - one output byte
+            $i = (ord($data[$pointer++]) - 0x21) << 6
+                | (ord($data[$pointer++]) - 0x21);
+            $output .= chr($i >> 4);
+        } elseif ($pointer == $lenLimit + 1) {
+            // three hanging chars - two output bytes
+            $i = (ord($data[$pointer++]) - 0x21) << 12
+                | (ord($data[$pointer++]) - 0x21) << 6
+                | (ord($data[$pointer++]) - 0x21);
+            $output .= chr($i >> 10)
+                . chr($i >> 2);
+        }
+        return $output;
+    }
+
+    /**
+     * Encode binary string into AAS data block (font, graphics)
+     *
+     * @param string $data binary string
+     *
+     * @return string Content for AAS data block
+     */
+    public static function encode(&$data)
+    {
+        $pointer = 0;
+        $lenLimit = strlen($data) - 2;
+        $output = '';
+        while ($pointer <= $lenLimit) {
+            $i = ord($data[$pointer++]) << 16
+                | ord($data[$pointer++]) << 8
+                | ord($data[$pointer++]);
+            $output .= chr(($i >> 18 & 0x3F) + 0x21)
+                . chr(($i >> 12 & 0x3F) + 0x21)
+                . chr(($i >> 6 & 0x3F) + 0x21)
+                . chr(($i & 0x3F) + 0x21);
+        }
+        if ($pointer == $lenLimit + 2) {
+            // one hanging byte
+            $i = ord($data[$pointer]) << 4;
+            $output .= chr(($i >> 6 & 0x3F) + 0x21)
+                . chr(($i & 0x3F) + 0x21);
+        } elseif ($pointer == $lenLimit + 1) {
+            // two hanging bytes
+            $i = ord($data[$pointer++]) << 10
+                | ord($data[$pointer]) << 2;
+            $output .= chr(($i >> 12 & 0x3F) + 0x21)
+                . chr(($i >> 6 & 0x3F) + 0x21)
+                . chr(($i & 0x3F) + 0x21);
+        }
+        return $output;
     }
 }
