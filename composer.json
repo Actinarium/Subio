@@ -1,6 +1,6 @@
 {
-    "name"              : "Actinarium/Subio",
-    "description"       : "Subtitles parser for PHP. Initially created for ASS and SRT, planning to expand",
+    "name"              : "actinarium/subio",
+    "description"       : "Subtitles parser for PHP. Initially created for ASS and SRT, planning to expand. Deep in alpha, use at your own risk",
     "minimum-stability" : "dev",
     "license"           : "BSD-3-Clause",
     "authors"           : [
