@@ -78,9 +78,9 @@ class DataBlock
         return $this;
     }
 
-    public function getEncodedDataFormatted()
+    public function getEncodedDataFormatted($newline = "\n")
     {
-        return chunk_split($this->getBinaryData(), 80, "\r\n");
+        return chunk_split($this->getEncodedData(), 80, $newline);
     }
 
     /**

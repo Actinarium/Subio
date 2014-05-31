@@ -18,5 +18,11 @@ class AssSubtitles {
     public $graphics = array();
 
     public $styleFormat;
+    public $styleFormatItems;
     public $eventFormat;
+    public $eventFormatItems;
+
+    public $bom;
+    public $newline;
+    public $stylesHeader;
 }

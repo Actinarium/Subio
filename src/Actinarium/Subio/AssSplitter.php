@@ -13,28 +13,34 @@ use Actinarium\Subio\Exception\UnexpectedDataException;
 
 abstract class AssSplitter
 {
-
     public static function parse($data)
     {
         if (empty($data)) {
             throw new UnexpectedDataException("Provided data is empty");
         }
 
-        // trim BOM from data if present:
-        $data = preg_replace("@\xEF\xBB\xBF|\xFE\xFF|\xFF\xFE@", '', $data);
+        $output = new AssSubtitles();
+        $matches = array();
 
-        // split data into lines
-        $lines = preg_split("/\r\n|\n|\r/", $data);
+        // detect and trim BOM bytes
+        if (preg_match("@^(?:\xEF\xBB\xBF|\xFE\xFF|\xFF\xFE)+@", $data, $matches) != 0)  {
+            $output->bom = $matches[0];
+            $data = substr($data, strlen($matches[0]));
+        }
+        // detect used line separator and split
+        if (preg_match("/\r\n|\n|\r/", $data, $matches)) {
+            $output->newline = $matches[0];
+        } else {
+            $output->newline = "\n";
+        }
+        $lines = explode($matches[0], $data);
 
         // initialize pointer and output object
         $linesCount = count($lines);
         /** @var int $pointer Current line pointer */
         $pointer = 0;
-        $matches = array();
         $styleFmtParsingRegex = null;
         $eventFmtParsingRegex = null;
-
-        $output = new AssSubtitles();
 
         // read [Script Info] section first
         if ($lines[$pointer] !== "[Script Info]") {
@@ -43,7 +49,7 @@ abstract class AssSplitter
         // todo: push section line to linked list
         while ($lines[++$pointer][0] !== '[') {
             if ($lines[$pointer][0] === ';') {
-                $output->comments[] = $lines[$pointer];
+                $output->comments[] = trim(substr($lines[$pointer], 1));
                 // todo: push comment line to linked list
             } elseif (preg_match('@^([\w\d]+[\w\d\s]+?)\s*:\s*(.*)@u', $lines[$pointer], $matches)) {
                 $output->properties[$matches[1]] = $matches[2];
@@ -82,6 +88,7 @@ abstract class AssSplitter
                     || $lines[$pointer] === '[v4 Styles]'
                     || $lines[$pointer] === '[Styles]'
                 ) {
+                    $output->stylesHeader = $lines[$pointer];
                     $state = 1;
                 } elseif ($lines[$pointer] === '[Events]') {
                     $state = 3;
@@ -98,7 +105,7 @@ abstract class AssSplitter
 
             // check for comment line
             while ($state < 5 && ($lines[$pointer][0] === ';' || $lines[$pointer][0] === '!')) {
-                $output->comments[] = $lines[$pointer];
+                $output->comments[] = trim(substr($lines[$pointer], 1));
                 // todo: push comment line to linked list
                 $pointer++;
             }
@@ -112,7 +119,8 @@ abstract class AssSplitter
                 // out of captured format parameters, build a regex to parse following lines
                 $formatParsingRegex = '\s*:\s*';
                 // process last one separately
-                for ($i = 1, $lastIndex = count($fmtParts) - 1; $i < $lastIndex; $i++) {
+                array_shift($fmtParts);
+                for ($i = 0, $lastIndex = count($fmtParts) - 1; $i < $lastIndex; $i++) {
                     if (preg_match('@[A-Za-z]+@', $fmtParts[$i])) {
                         $formatParsingRegex .= "(?P<{$fmtParts[$i]}>[^,]*),";
                     } else {
@@ -136,10 +144,12 @@ abstract class AssSplitter
 
                 if ($state === 1) {
                     $output->styleFormat = $lines[$pointer];
+                    $output->styleFormatItems = $fmtParts;
                     $styleFmtParsingRegex = '@^Style' . $formatParsingRegex;
                 } else {
                     // here we should also capture event type
                     $output->eventFormat = $lines[$pointer];
+                    $output->eventFormatItems = $fmtParts;
                     $eventFmtParsingRegex = '@^(?P<eventType>\w+)' . $formatParsingRegex;
                 }
                 // todo: push format line to linked list
